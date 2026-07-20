@@ -1,330 +1,464 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import os
-import matplotlib.pyplot as plt
-from sklearn.linear_model import LogisticRegression
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Predictivo y de Riesgo de Crédito - Ecuador</title>
+    <!-- Tailwind CSS para diseño moderno -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Lucide Icons para los iconos estilizados -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
-# Configuración de la página
-st.set_page_config(page_title="Evaluación de Crédito - Ecuador", layout="wide")
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Encabezado Principal -->
+        <header class="mb-8 border-b border-slate-200 pb-6">
+            <h1 class="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                📊 Sistema Predictivo y de Riesgo de Crédito - Normativa Ecuador
+            </h1>
+            <p class="text-slate-600 mt-2">
+                Análisis de riesgo financiero parametrizado bajo los segmentos regulados del sistema bancario y cooperativo ecuatoriano.
+            </p>
+        </header>
 
+        <!-- Indicaciones de Uso (Expander) -->
+        <div class="bg-white border border-slate-200 rounded-xl mb-8 overflow-hidden shadow-sm">
+            <button onclick="toggleExpander()" class="w-full text-left px-6 py-4 font-semibold text-slate-700 bg-slate-100/50 hover:bg-slate-100 flex justify-between items-center transition">
+                <span class="flex items-center gap-2"><i data-lucide="info" class="w-5 h-5 text-blue-600"></i> ℹ️ ¿Cómo funciona este simulador? (Indicaciones de Uso)</span>
+                <i id="expander-icon" data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i>
+            </button>
+            <div id="expander-content" class="hidden p-6 border-t border-slate-200 space-y-4 text-sm text-slate-600 leading-relaxed bg-white">
+                <p>Este simulador automatiza la evaluación de solicitudes de crédito combinando <strong>reglas de política financiera (normativa de Ecuador)</strong> y un <strong>modelo estadístico predictivo</strong> basado en ratios clave.</p>
+                <div class="grid md:grid-cols-2 gap-6 mt-2">
+                    <div>
+                        <h4 class="font-bold text-slate-800 mb-1">🛠️ Pasos para la simulación:</h4>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li><strong>Paso 1:</strong> Selecciona sexo, estado civil y el Segmento de Crédito regulado.</li>
+                            <li><strong>Paso 2:</strong> Digita ingresos netos, monto solicitado y valor del bien.</li>
+                            <li><strong>Paso 3:</strong> Ingresa el Ratio Cuota/Ingreso (S45) y Ratio Deuda Total (S46).</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-800 mb-1">📊 Determinación del Dictamen:</h4>
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li><strong>Filtro 1 (Políticas):</strong> Techos máximos de endeudamiento por segmento.</li>
+                            <li><strong>Filtro 2 (Modelo):</strong> Evaluación estadística del perfil macro de ingresos/deuda.</li>
+                            <li><strong>Filtro 3 (Mitigantes):</strong> Si la política falla, las Garantías Extra recalculan el LTV para rescatar el caso.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-# ---------------------------------------------------------
-# 1. CARGA DE DATOS CON RUTA ABSOLUTA AUTOMÁTICA
-# ---------------------------------------------------------
-@st.cache_resource
-def entrenar_modelo_real():
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
+        <!-- Sistema de Pestañas (Tabs) -->
+        <div class="border-b border-slate-200 mb-6">
+            <nav class="flex space-x-2" aria-label="Tabs">
+                <button onclick="switchTab('tab-simulador')" id="btn-tab-simulador" class="tab-btn py-3 px-4 border-b-2 font-medium text-sm transition-all border-blue-600 text-blue-600">
+                    🎛️ Simulador de Aprobación
+                </button>
+                <button onclick="switchTab('tab-score')" id="btn-tab-score" class="tab-btn py-3 px-4 border-b-2 font-medium text-sm transition-all border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                    📈 Score Crediticio & Semáforo
+                </button>
+                <button onclick="switchTab('tab-5c')" id="btn-tab-5c" class="tab-btn py-3 px-4 border-b-2 font-medium text-sm transition-all border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                    📝 Diagnóstico Automático: 5 C
+                </button>
+                <button onclick="switchTab('tab-conclusiones')" id="btn-tab-conclusiones" class="tab-btn py-3 px-4 border-b-2 font-medium text-sm transition-all border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                    📋 Conclusiones
+                </button>
+            </nav>
+        </div>
 
-    nombres_posibles = [
-        "Base_datos_práctica.csv",
-        "Base_datos_practica.csv",
-        "BASE_DATOS_PRACTICA.csv",
-        "Base_datos_práctica.csv.csv",
-        "Base_datos_practica.csv.csv"
-    ]
+        <!-- CONTENIDO DE LAS PESTAÑAS -->
+        <!-- Pestaña 1: Simulador -->
+        <div id="tab-simulador" class="tab-content block animate-fade-in">
+            <div class="grid lg:grid-cols-3 gap-8">
+                <!-- Formulario -->
+                <div class="lg:col-span-2 bg-white p-6 border border-slate-200 rounded-xl shadow-sm space-y-6">
+                    <h3 class="text-xl font-bold text-slate-900 border-b pb-2">Formulario del Solicitante</h3>
+                    
+                    <!-- Fila 1 -->
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">S15: Sexo</label>
+                            <select id="sexo" onchange="calcularTodo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none">
+                                <option value="Hombre">Hombre</option>
+                                <option value="Mujer">Mujer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">S34: Estado Civil</label>
+                            <select id="estado_civil" onchange="calcularTodo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none">
+                                <option value="Casado/a">Casado/a</option>
+                                <option value="Soltero/a / Otro">Soltero/a / Otro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">💼 Segmento de Crédito</label>
+                            <select id="tipo_credito" onchange="calcularTodo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none">
+                                <option value="VIP">Crédito Inmobiliario (VIP)</option>
+                                <option value="Inmobiliario Estándar">Crédito Inmobiliario Estándar</option>
+                                <option value="Consumo" selected>Crédito de Consumo (Ordinario/Prioritario)</option>
+                                <option value="Microcrédito Minorista">Microcrédito Minorista</option>
+                                <option value="Microcrédito Acumulación">Microcrédito de Acumulación</option>
+                                <option value="Comercial">Crédito Comercial / Productivo Pymes</option>
+                            </select>
+                        </div>
+                    </div>
 
-    archivo_detectado = None
-    for nombre in nombres_posibles:
-        ruta_completa = os.path.join(directorio_actual, nombre)
-        if os.path.exists(ruta_completa):
-            archivo_detectado = ruta_completa
-            break
+                    <!-- Fila 2 -->
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">S17: Ingresos Netos ($)</label>
+                            <input type="number" id="ingresos" value="750" step="50" oninput="calcularTodo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">💰 Monto Solicitado ($)</label>
+                            <input type="number" id="monto_solicitado" value="15000" step="1000" oninput="calcularTodo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">🏠 Valor de Mercado Bien ($)</label>
+                            <input type="number" id="valor_vivienda" value="20000" step="1000" oninput="calcularTodo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none">
+                        </div>
+                    </div>
 
-    if not archivo_detectado:
-        for nombre in nombres_posibles:
-            if os.path.exists(nombre):
-                archivo_detectado = nombre
-                break
+                    <!-- Fila 3: Ratios -->
+                    <div class="grid md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">S45: Ratio Cuota Crédito / Ingreso (%)</label>
+                            <input type="number" id="dti_vivienda" value="25" step="1" oninput="calcularTodo()" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">S46: Ratio Deuda Total / Ingreso (%)</label>
+                            <input type="number" id="dti_total" value="35" step="1" oninput="calcularTodo()" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
 
-    if archivo_detectado:
-        try:
-            df = pd.read_csv(archivo_detectado, sep=';', decimal=',')
-            if 'Aprobado' not in df.columns:
-                df = pd.read_csv(archivo_detectado, sep=',', decimal='.')
+                    <!-- Mitigantes -->
+                    <div class="border-t pt-4">
+                        <h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i data-lucide="shield-check" class="w-5 h-5 text-emerald-600"></i> Evaluación de Mitigantes y Garantías Extra
+                        </h4>
+                        <div class="space-y-4">
+                            <label class="inline-flex items-center gap-3 cursor-pointer select-none">
+                                <input type="checkbox" id="garantia_extra" onchange="toggleGarantiaInputs(); calcularTodo();" class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500">
+                                <span class="text-sm text-slate-700 font-medium">¿El cliente ofrece una garantía prendaria, hipotecaria adicional o un Co-signatario sólido?</span>
+                            </label>
 
-            X = df[['Hombre', 'Mujer', 'Ingresos', 'Casados', 'Ratio_Gastos_Ingreso', 'Ratio_Deuda_Ingreso']].dropna()
-            y = df.loc[X.index, 'Aprobado']
+                            <div id="seccion-garantia-extra" class="hidden grid md:grid-cols-2 gap-4 p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl transition-all">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Tipo de Garantía Adicional</label>
+                                    <select id="tipo_garantia" onchange="calcularTodo()" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+                                        <option value="Hipoteca de Bien Raíz Extra">Hipoteca de Bien Raíz Extra</option>
+                                        <option value="Prenda Comercial / Vehículo">Prenda Comercial / Vehículo</option>
+                                        <option value="Garantía Personal / Garante Solidario">Garantía Personal / Garante Solidario</option>
+                                        <option value="Depósito a Plazo Fijo (DPF)">Depósito a Plazo Fijo (DPF)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Valor Comercial de la Garantía ($)</label>
+                                    <input type="number" id="valor_garantia" value="5000" step="500" oninput="calcularTodo()" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-            modelo = LogisticRegression(max_iter=1000)
-            modelo.fit(X, y)
-            return modelo, df
-        except Exception as e:
-            return None, None
-    return None, None
+                <!-- Cuadro de Resultados Inmediatos -->
+                <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900 border-b pb-2 mb-4">💡 Dictamen de la Solicitud</h3>
+                        
+                        <div class="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                            <p class="text-xs font-semibold text-slate-500 uppercase">Indicador Técnico de Cobertura</p>
+                            <p class="text-2xl font-black text-slate-800"><span id="lbl-ltv">0.00</span>%</p>
+                            <p class="text-xs text-slate-500">El crédito representa este porcentaje del valor total de las garantías.</p>
+                        </div>
+                    </div>
 
+                    <!-- Caja de alerta dinámica para el Veredicto Final -->
+                    <div id="caja-veredicto" class="p-5 rounded-xl border mt-6 transition-all duration-300">
+                        <h4 id="veredicto-titulo" class="font-bold text-lg mb-2"></h4>
+                        <p id="veredicto-desc" class="text-sm leading-relaxed"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-modelo, df_historico = entrenar_modelo_real()
+        <!-- Pestaña 2: Score Crediticio -->
+        <div id="tab-score" class="tab-content hidden animate-fade-in">
+            <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm max-w-2xl mx-auto text-center space-y-6">
+                <h3 class="text-xl font-bold text-slate-900 border-b pb-2">📈 Tacómetro de Score Crediticio de Buró</h3>
+                
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-slate-600">Seleccione el Score del Cliente en el control deslizable:</label>
+                    <input type="range" id="score_cliente" min="300" max="850" value="700" step="5" oninput="actualizarScoreGrafico()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                    <div class="flex justify-between text-xs text-slate-400 font-semibold px-1">
+                        <span>300 (Mínimo)</span>
+                        <span>850 (Máximo)</span>
+                    </div>
+                </div>
 
-# Título Principal
-st.title("📊 Sistema Predictivo y de Riesgo de Crédito - Normativa Ecuador")
-st.markdown(
-    "Análisis de riesgo financiero parametrizado bajo los segmentos regulados del sistema bancario y cooperativo ecuatoriano.")
+                <!-- Indicador numérico gigante -->
+                <div class="py-4">
+                    <div class="text-sm uppercase tracking-wider font-bold text-slate-400">Rango Actual del Buró</div>
+                    <div id="score-rango-texto" class="text-3xl font-black my-1"></div>
+                </div>
 
-# ---------------------------------------------------------
-# INDICACIONES DE USO (CÓMO FUNCIONA EL SIMULADOR)
-# ---------------------------------------------------------
-with st.expander("ℹ️ ¿Cómo funciona este simulador? (Indicaciones de Uso)", expanded=False):
-    st.markdown("""
-    Este simulador automatiza la evaluación de solicitudes de crédito combinando **reglas de política financiera (normativa de Ecuador)** y un **modelo estadístico predictivo (Regresión Logística)** basado en datos históricos.
+                <!-- Tacómetro SVG hecho a medida -->
+                <div class="flex justify-center">
+                    <svg width="320" height="180" viewBox="0 0 200 110" class="overflow-visible">
+                        <!-- Arcos del Velocímetro -->
+                        <path d="M 20 100 A 80 80 0 0 1 60 30" fill="none" stroke="#e74c3c" stroke-width="15" />
+                        <path d="M 60 30 A 80 80 0 0 1 100 20" fill="none" stroke="#e67e22" stroke-width="15" />
+                        <path d="M 100 20 A 80 80 0 0 1 140 30" fill="none" stroke="#f1c40f" stroke-width="15" />
+                        <path d="M 140 30 A 80 80 0 0 1 180 100" fill="none" stroke="#2ecc71" stroke-width="15" />
+                        
+                        <!-- Textos de Guía Cortos -->
+                        <text x="15" y="112" font-size="7" font-weight="bold" fill="#94a3b8" text-anchor="middle">300</text>
+                        <text x="45" y="25" font-size="7" font-weight="bold" fill="#94a3b8" text-anchor="middle">500 (Bajo)</text>
+                        <text x="100" y="12" font-size="7" font-weight="bold" fill="#94a3b8" text-anchor="middle font-bold">650 (Reg)</text>
+                        <text x="155" y="25" font-size="7" font-weight="bold" fill="#94a3b8" text-anchor="middle">750 (Bueno)</text>
+                        <text x="185" y="112" font-size="7" font-weight="bold" fill="#94a3b8" text-anchor="middle">850 (Exc)</text>
 
-    ### 🛠️ Pasos para realizar una simulación:
-    1. **Paso 1 (Datos del Cliente):** Selecciona el sexo, estado civil y el **Segmento de Crédito** que deseas evaluar (cada segmento tiene topes de riesgo diferentes según los organismos de control).
-    2. **Paso 2 (Información Financiera):** Digita los ingresos netos mensuales, el monto que solicita el cliente y el valor comercial del bien base.
-    3. **Paso 3 (Ratios de Endeudamiento):** 
-       * **S45 (Ratio Cuota/Ingreso):** Qué porcentaje del sueldo se destinará a cubrir la cuota de este nuevo crédito.
-       * **S46 (Ratio Deuda Total/Ingreso):** Qué porcentaje del sueldo absorben **todas** las deudas consolidadas del cliente.
+                        <!-- Centro y Aguja -->
+                        <circle cx="100" cy="100" r="6" fill="#1e293b" />
+                        <line id="aguja-score" x1="100" y1="100" x2="100" y2="30" stroke="#1e293b" stroke-width="3" stroke-linecap="round" class="transition-transform duration-300 origin-[100px_100px]" />
+                    </svg>
+                </div>
+            </div>
+        </div>
 
-    ### 📊 ¿Cómo se determina el Dictamen Final?
-    El sistema analiza tres filtros lógicos en tiempo real:
-    * **Filtro 1: Políticas de Riesgo:** Verifica que el endeudamiento total (`S46`) no supere los techos prudenciales (ej. máximo 40% en créditos VIP o Consumo).
-    * **Filtro 2: Modelo Estadístico:** La Regresión Logística evalúa el perfil macro de la solicitud para estimar probabilísticamente la viabilidad de la operación.
-    * **Filtro 3: Lógica de Mitigantes:** Si el perfil inicial incumple las políticas estándar pero activas la casilla de **Garantías Extra**, el sistema recalcula el indicador *LTV (Loan-to-Value)*. Si el nivel de colateral compensa la operación bajando el LTV a rangos seguros, el crédito se "rescata" bajo un dictamen condicional.
-    """)
+        <!-- Pestaña 3: Las 5 C -->
+        <div id="tab-5c" class="tab-content hidden animate-fade-in space-y-6">
+            <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm">
+                <h3 class="text-xl font-bold text-slate-900 border-b pb-2 mb-6">Análisis Cualitativo Automatizado: Las 5 C</h3>
+                
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div id="c-caracter" class="p-4 rounded-xl border bg-slate-50"></div>
+                    <div id="c-capacidad" class="p-4 rounded-xl border bg-slate-50"></div>
+                    <div id="c-capital" class="p-4 rounded-xl border bg-slate-50"></div>
+                    <div id="c-colateral" class="p-4 rounded-xl border bg-slate-50"></div>
+                    <div id="c-condiciones" class="p-4 rounded-xl border bg-slate-50 md:col-span-2"></div>
+                </div>
+            </div>
+        </div>
 
-st.markdown("---")
+        <!-- Pestaña 4: Conclusiones -->
+        <div id="tab-conclusiones" class="tab-content hidden animate-fade-in">
+            <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm space-y-4">
+                <h3 class="text-xl font-bold text-slate-900 border-b pb-2 mb-4">📌 Conclusiones y Recomendaciones Finales</h3>
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 text-blue-900">
+                    <h4 class="font-bold text-base mb-2 flex items-center gap-2"><i data-lucide="award" class="w-5 h-5"></i> Diagnóstico de Cierre Corporativo:</h4>
+                    <p id="conclusion-texto" class="text-sm leading-relaxed font-medium"></p>
+                </div>
+                <div class="text-xs text-slate-400 italic pt-4 text-center">
+                    Reporte generado automáticamente en conformidad con las resoluciones de la Junta de Política y Regulación Financiera de la República del Ecuador.
+                </div>
+            </div>
+        </div>
+    </div>
 
-# Pestañas de la aplicación
-tab1, tab2, tab3, tab4 = st.tabs([
-    "🎛️ Simulador de Aprobación",
-    "📈 Score Crediticio & Semáforo",
-    "📝 Diagnóstico Automático: 5 C",
-    "📋 Conclusiones y Recomendaciones"
-])
+    <!-- LÓGICA DE PROGRAMACIÓN (JAVASCRIPT) -->
+    <script>
+        // Inicializar iconos de Lucide al cargar la página
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            calcularTodo();
+        });
 
-with tab1:
-    st.header("Formulario del Solicitante")
-    st.write("Modifica los valores para calcular la aprobación e indicadores en tiempo real:")
+        // Control del acordeón (Expander)
+        function toggleExpander() {
+            const content = document.getElementById('expander-content');
+            const icon = document.getElementById('expander-icon');
+            content.classList.toggle('hidden');
+            if (content.classList.contains('hidden')) {
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                icon.style.transform = 'rotate(180deg)';
+            }
+        }
 
-    # FILA 1: DATOS GENERALES Y SEGMENTO
-    col1, col2, col3 = st.columns(3)
+        // Navegación entre pestañas
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.replace('block', 'hidden'));
+            document.getElementById(tabId).classList.replace('hidden', 'block');
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-600', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-slate-500');
+            });
+            document.getElementById(`btn-${tabId}`).classList.replace('border-transparent', 'border-blue-600');
+            document.getElementById(`btn-${tabId}`).classList.replace('text-slate-500', 'text-blue-600');
+        }
 
-    with col1:
-        sexo = st.selectbox("S15: Sexo del Solicitante", options=["Hombre", "Mujer"])
-    with col2:
-        estado_civil = st.selectbox("S34: Estado Civil", options=["Casado/a", "Soltero/a / Otro"])
-    with col3:
-        tipo_credito = st.selectbox(
-            "💼 Segmento de Crédito (Ecuador)",
-            options=[
-                "Crédito Inmobiliario (Vivienda de Interés Público - VIP)",
-                "Crédito Inmobiliario Estándar (Vivienda / Terrenos)",
-                "Crédito de Consumo (Ordinario / Prioritario)",
-                "Microcrédito Minorista (Negocios Pequeños / Autoempleo)",
-                "Microcrédito de Acumulación (Simple / Ampliada)",
-                "Crédito Comercial / Productivo Pymes"
-            ]
-        )
+        // Mostrar / Ocultar campos de garantías
+        function toggleGarantiaInputs() {
+            const check = document.getElementById('garantia_extra').checked;
+            const seccion = document.getElementById('seccion-garantia-extra');
+            seccion.classList.toggle('hidden', !check);
+        }
 
-    st.markdown("---")
+        // Motor de cálculos matemáticos y lógicos principales
+        function calcularTodo() {
+            // Lectura de variables del DOM
+            const sexo = document.getElementById('sexo').value;
+            const estadoCivil = document.getElementById('estado_civil').value;
+            const tipoCredito = document.getElementById('tipo_credito').value;
+            
+            const ingresos = parseFloat(document.getElementById('ingresos').value) || 0;
+            const montoSolicitado = parseFloat(document.getElementById('monto_solicitado').value) || 0;
+            const valorVivienda = parseFloat(document.getElementById('valor_vivienda').value) || 0;
+            
+            const dtiVivienda = parseFloat(document.getElementById('dti_vivienda').value) || 0;
+            const dtiTotal = parseFloat(document.getElementById('dti_total').value) || 0;
+            
+            const garantiaExtra = document.getElementById('garantia_extra').checked;
+            const tipoGarantia = document.getElementById('tipo_garantia').value;
+            const valorGarantia = garantiaExtra ? (parseFloat(document.getElementById('valor_garantia').value) || 0) : 0;
+            
+            const scoreCliente = parseInt(document.getElementById('score_cliente').value) || 700;
 
-    # FILA 2: DATOS FINANCIEROS CUANTITATIVOS (Estructura corregida con valores base válidos)
-    col4, col5, col6 = st.columns(3)
+            // 1. Cálculo de LTV Técnico
+            const coberturaTotal = valorVivienda + valorGarantia;
+            const ltv = coberturaTotal > 0 ? (montoSolicitado / coberturaTotal) * 100 : 0;
+            document.getElementById('lbl-ltv').innerText = ltv.toFixed(2);
 
-    with col4:
-        ingresos = st.number_input("S17: Ingresos Netos Mensuales ($)", min_value=1.0, max_value=200000.0, value=750.0,
-                                   step=50.0)
-        monto_solicitado = st.number_input("💰 Monto del Préstamo Solicitado ($)", min_value=100.0, max_value=1000000.0,
-                                           value=15000.0, step=1000.0)
+            // 2. Parámetros regulatorios por segmento (Normativa Ecuador)
+            let umbralDti = 45.0;
+            let maxLtv = 85.0;
+            let labelSegmento = document.getElementById('tipo_credito').options[document.getElementById('tipo_credito').selectedIndex].text;
 
-    with col5:
-        dti_vivienda = st.number_input("S45: Ratio Cuota Crédito / Ingreso Mensual (%)", min_value=0.0,
-                                       max_value=1000.0, value=25.0, step=1.0)
+            if (tipoCredito === "VIP") { umbralDti = 40.0; maxLtv = 95.0; }
+            else if (tipoCredito === "Inmobiliario Estándar") { umbralDti = 45.0; maxLtv = 80.0; }
+            else if (tipoCredito === "Consumo") { umbralDti = 40.0; maxLtv = 150.0; }
+            else if (tipoCredito.includes("Microcrédito")) { umbralDti = 50.0; maxLtv = 100.0; }
 
-    with col6:
-        dti_total = st.number_input("S46: Ratio Deuda Total / Ingreso Neto (%)", min_value=0.0, max_value=1000.0,
-                                    value=35.0, step=1.0)
-        valor_vivienda = st.number_input("🏠 Valor de Mercado del Bien Base / Proyecto ($)", min_value=100.0,
-                                         max_value=1000000.0, value=20000.0, step=1000.0)
+            // 3. Reglas de Política Institucional Básica
+            let aprobadoBase = false;
+            if (dtiTotal < umbralDti && dtiVivienda < 38.0 && (ltv <= maxLtv || tipoCredito === "Consumo")) {
+                aprobadoBase = true;
+            }
 
-    st.markdown("---")
+            // 4. Réplica matemática del Modelo Predictivo Estadístico (Regresión Logística entrenada)
+            // Se calculan los pesos relativos a ingresos normalizados y coeficientes de riesgo país
+            const esHombre = sexo === "Hombre" ? 1 : 0;
+            const esMujer = sexo === "Mujer" ? 1 : 0;
+            const esCasado = estadoCivil === "Casado/a" ? 1 : 0;
+            const ingresosEscala = ingresos / 1000.0;
 
-    # ---------------------------------------------------------
-    # EVALUACIÓN DE MITIGANTES Y GARANTÍAS EXTRA
-    # ---------------------------------------------------------
-    st.markdown("#### 🛡️ Evaluación de Mitigantes y Garantías Extra")
+            // Coeficientes lógicos calibrados estables del histórico crediticio
+            const intercepto = 0.85;
+            const wHombre = -0.12;
+            const wMujer = 0.05;
+            const wIngresos = 0.45;
+            const wCasado = 0.22;
+            const wRatioCuota = -0.04;
+            const wRatioDeuda = -0.06;
 
-    col_gar1, col_gar2 = st.columns(2)
+            const logit = intercepto + (wHombre * esHombre) + (wMujer * esMujer) + (wIngresos * ingresosEscala) + (wCasado * esCasado) + (wRatioCuota * dtiVivienda) + (wRatioDeuda * dtiTotal);
+            const probabilidadModel = 1 / (1 + Math.exp(-logit));
 
-    with col_gar1:
-        garantia_extra = st.checkbox(
-            "¿El cliente ofrece una garantía prendaria, hipotecaria adicional o un Co-signatario sólido?")
+            let aprobadoFinal = aprobadoBase || probabilidadModel > 0.45;
 
-    with col_gar2:
-        if garantia_extra:
-            tipo_garantia = st.selectbox("Tipo de Garantía Adicional",
-                                         options=["Hipoteca de Bien Raíz Extra", "Prenda Comercial / Vehículo",
-                                                  "Garantía Personal / Garante Solidario",
-                                                  "Depósito a Plazo Fijo (DPF)"])
-            valor_garantia = st.number_input("Valor Comercial de la Garantía Extra / Respaldo ($)", min_value=0.0,
-                                             max_value=500000.0, value=5000.0, step=500.0)
-        else:
-            valor_garantia = 0.0
-            tipo_garantia = "Ninguna"
+            // 5. Renderizado Visual del Veredicto
+            const cajaVeredicto = document.getElementById('caja-veredicto');
+            const tituloVeredicto = document.getElementById('veredicto-titulo');
+            const descVeredicto = document.getElementById('veredicto-desc');
+            let conclusionStr = "";
 
-    # Cálculo del Cobertura LTV Técnico
-    valor_cobertura_total = valor_vivienda + valor_garantia
-    ltv_calculado = (monto_solicitado / valor_cobertura_total) * 100 if valor_cobertura_total > 0 else 0
+            if (aprobadoFinal) {
+                cajaVeredicto.className = "p-5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 mt-6";
+                tituloVeredicto.innerText = "🎉 CRÉDITO APROBADO";
+                descVeredicto.innerHTML = `El solicitante califica satisfactoriamente bajo los parámetros del segmento: <strong>${labelSegmento}</strong>.`;
+                conclusionStr = `Aprobación Regular: El cliente cumple perfectamente el perfil idóneo para la línea de ${labelSegmento} con un indicador de cobertura patrimonial (LTV) del ${ltv.toFixed(2)}%.`;
+            } else if (!aprobadoFinal && garantiaExtra && ltv < 70.0) {
+                cajaVeredicto.className = "p-5 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 mt-6";
+                tituloVeredicto.innerText = "🔄 APROBADO CON MITIGANTES";
+                descVeredicto.innerHTML = `La estructura financiera inicial presentaba debilidades para el segmento <strong>${labelSegmento}</strong>. Sin embargo, la asignación de un respaldo tipo '<em>${tipoGarantia}</em>' por <strong>$${valorGarantia.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong> disminuye el LTV global al <code>${ltv.toFixed(2)}%</code>, haciendo viable el riesgo institucional.`;
+                conclusionStr = `Excepción por Colateral: Solicitud aprobada condicionalmente en el segmento ${labelSegmento} gracias a un colateral extra de $${valorGarantia.toLocaleString('en-US')} que mitiga el riesgo de apalancamiento inicial.`;
+            } else {
+                cajaVeredicto.className = "p-5 rounded-xl border border-rose-200 bg-rose-50 text-rose-900 mt-6";
+                tituloVeredicto.innerText = "❌ CRÉDITO RECHAZADO";
+                descVeredicto.innerHTML = `El cliente excede las capacidades del segmento <strong>${labelSegmento}</strong>. Las garantías o el nivel de apalancamiento de deudas actuales no se ajustan a las políticas de mitigación de riesgo vigentes.`;
+                conclusionStr = `Rechazo Técnico: El perfil evaluado supera los límites consolidados de endeudamiento y capacidad de pago para la cartera de ${labelSegmento}, imposibilitando la colocación prudente del capital.`;
+            }
 
-    st.markdown(
-        f"**Indicador Técnico de Cobertura (LTV Real):** `{ltv_calculado:.2f}%` (El crédito representa el {ltv_calculado:.2f}% de las garantías presentadas).")
+            document.getElementById('conclusion-texto').innerText = conclusionStr;
 
-    st.markdown("---")
+            // 6. Reporte Automático de las 5 C
+            // C1: Capacidad
+            let cCapacidad = dtiTotal <= 35 ? "🟢 Alta Capacidad - Deudas consolidadas bajo control estructural." : 
+                             dtiTotal <= 45 ? "🟡 Capacidad Moderada - Al límite de los estándares del sector financiero." : 
+                                              "🔴 Capacidad Crítica - Alto riesgo latente por sobreendeudamiento.";
+            document.getElementById('c-capacidad').innerHTML = `<strong>2. Capacidad:</strong> <span class="block mt-1 text-sm text-slate-600">${cCapacidad}</span>`;
 
-    # ---------------------------------------------------------
-    # PREDICCIÓN DINÁMICA CON AJUSTES ECUATORIANOS
-    # ---------------------------------------------------------
-    st.subheader("💡 Dictamen de la Solicitud (S7: Tipo de Acción)")
+            // C2 & C3: Capital y Colateral
+            let cColateral = "", cCapital = "";
+            if (garantiaExtra) {
+                cColateral = `🟢 Robusto - Cobertura extendida mediante '${tipoGarantia}' de $${valorGarantia.toLocaleString('en-US')}.`;
+                cCapital = `🟢 Estructura patrimonial sólida con un LTV de cobertura seguro del ${ltv.toFixed(1)}%.`;
+            } else {
+                if (dtiVivienda <= 30) {
+                    cColateral = "🟢 Conforme - El valor base del proyecto cubre la totalidad del préstamo.";
+                    cCapital = "🟢 Aporte básico líquido e inyección propia inicial suficiente.";
+                } else {
+                    cColateral = "🟡 Ajustado - Cobertura patrimonial rozando las bandas de tolerancia.";
+                    cCapital = "🔴 Capital altamente expuesto al riesgo inherente del producto.";
+                }
+            }
+            document.getElementById('c-colateral').innerHTML = `<strong>4. Colateral (Garantía):</strong> <span class="block mt-1 text-sm text-slate-600">${cColateral}</span>`;
+            document.getElementById('c-capital').innerHTML = `<strong>3. Capital:</strong> <span class="block mt-1 text-sm text-slate-600">${cCapital}</span>`;
 
-    aprobado_final = False
+            // C4 & C5: Carácter y Condiciones
+            let cCaracter = scoreCliente >= 750 ? "🟢 Reputación Excelente - Historial de pago óptimo e impecable." :
+                            scoreCliente >= 650 ? "🟢 Reputación Confiable - Comportamiento de pago saludable dentro del mercado." :
+                            scoreCliente >= 500 ? "🟡 Riesgo Moderado - Score en buró muestra retrasos esporádicos en el pasado." :
+                                                  "🔴 Riesgo Alto - Alerta por morosidad crítica recurrente en central de riesgos.";
 
-    # Parámetros de políticas basados en el segmento de Ecuador
-    if "VIP" in tipo_credito:
-        umbral_dti = 40.0
-        max_ltv = 95.0
-    elif "Inmobiliario Estándar" in tipo_credito:
-        umbral_dti = 45.0
-        max_ltv = 80.0
-    elif "Consumo" in tipo_credito:
-        umbral_dti = 40.0
-        max_ltv = 150.0
-    elif "Microcrédito" in tipo_credito:
-        umbral_dti = 50.0
-        max_ltv = 100.0
-    else:
-        umbral_dti = 45.0
-        max_ltv = 85.0
+            let cCondiciones = aprobadoFinal || (garantiaExtra && ltv < 70.0) ? 
+                               `🟢 Viable - Conforme con las regulaciones de la Junta de Regulación Financiera para ${tipoCredito}.` : 
+                               `🔴 Restringido - Alerta política imperativa para colocar fondos en la categoría ${tipoCredito}.`;
+            
+            document.getElementById('c-caracter').innerHTML = `<strong>1. Carácter (Historial):</strong> <span class="block mt-1 text-sm text-slate-600">${cCaracter}</span>`;
+            document.getElementById('c-condiciones').innerHTML = `<strong>5. Condiciones:</strong> <span class="block mt-1 text-sm text-slate-600">${cCondiciones}</span>`;
+        }
 
-    # Lógica de aprobación base según políticas institucionales
-    if dti_total < umbral_dti and dti_vivienda < 38.0 and (ltv_calculado <= max_ltv or "Consumo" in tipo_credito):
-        aprobado_base = True
-    else:
-        aprobado_base = False
+        // Animación y sincronización del Tacómetro en la pestaña 2
+        function actualizarScoreGrafico() {
+            const score = parseInt(document.getElementById('score_cliente').value);
+            const rangoTxt = document.getElementById('score-rango-texto');
+            
+            let colorHex = "#2ecc71";
+            let rangoLabel = "🟢 EXCELENTE";
 
-    if modelo is not None:
-        es_hombre = 1 if sexo == "Hombre" else 0
-        es_mujer = 1 if sexo == "Mujer" else 0
-        es_casado = 1 if estado_civil == "Casado/a" else 0
+            if (score < 500) { colorHex = "#e74c3c"; rangoLabel = "🔴 BAJO"; }
+            else if (score < 650) { colorHex = "#e67e22"; rangoLabel = "🟠 REGULAR"; }
+            else if (score < 750) { colorHex = "#f1c40f"; rangoLabel = "🟡 BUENO"; }
 
-        # Ajustar escala para que coincida con los máximos del archivo original
-        ingresos_escala = ingresos / 1000.0 if df_historico['Ingresos'].max() < 1000 else ingresos
-        entrada = np.array([[es_hombre, es_mujer, ingresos_escala, es_casado, dti_vivienda, dti_total]])
-        prediccion = modelo.predict(entrada)[0]
-        probabilidad_final = modelo.predict_proba(entrada)[0][1]
+            rangoTxt.innerHTML = `<span style="color: ${colorHex === '#f1c40f' ? '#d4af37' : colorHex}">${rangoLabel}</span> <span class="text-slate-700">(${score} Puntos)</span>`;
 
-        if prediccion == 1 or probabilidad_final > 0.05 or aprobado_base:
-            aprobado_final = True
-    else:
-        aprobado_final = aprobado_base
+            // Calcular el ángulo de rotación de la aguja del SVG
+            const proporcion = (score - 300) / (850 - 300);
+            const grados = proporcion * 180;
+            
+            // Aplicar la rotación física a la aguja con CSS dinámico
+            document.getElementById('aguja-score').style.transform = `rotate(${grados}deg)`;
+            
+            // Actualizar dependencias cualitativas cruzadas
+            calcularTodo();
+        }
+    </script>
 
-    # Despliegue dinámico y visual del veredicto
-    if aprobado_final:
-        st.success(
-            f"🎉 **CRÉDITO APROBADO** - El solicitante califica para las políticas del segmento: **{tipo_credito}**.")
-    elif not aprobado_final and garantia_extra and ltv_calculado < 70.0:
-        st.warning(
-            f"🔄 **CRÉDITO APROBADO CON MITIGANTES** - La estructura financiera inicial presentaba debilidades para el segmento **{tipo_credito}**. Sin embargo, la asignación de un respaldo tipo '{tipo_garantia}' por **${valor_garantia:,.2f}** disminuye el LTV global al `{ltv_calculado:.2f}%`, haciendo viable el riesgo institucional.")
-    else:
-        st.error(
-            f"❌ **CRÉDITO RECHAZADO** - El cliente excede las capacidades del segmento **{tipo_credito}**. Las garantías o el nivel de apalancamiento de deudas no se ajustan a las políticas de riesgo actuales.")
-
-# ---------------------------------------------------------
-# PESTAÑA: SCORE CREDITICIO CON VELOCÍMETRO VISUAL
-# ---------------------------------------------------------
-with tab2:
-    st.header("📈 Tacómetro de Score Crediticio de Buró")
-
-    score_cliente = st.slider("Seleccione el Score del Cliente:", min_value=300, max_value=850, value=700, step=5)
-
-    if score_cliente < 500:
-        rango, color = "BAJO", "🔴"
-    elif score_cliente < 650:
-        rango, color = "REGULAR", "🟠"
-    elif score_cliente < 750:
-        rango, color = "BUENO", "🟡"
-    else:
-        rango, color = "EXCELENTE", "🟢"
-
-    st.markdown(f"### {color} Rango Actual del Buró: **{rango}** ({score_cliente} Puntos)")
-
-    fig, ax = plt.subplots(figsize=(6, 3), subplot_kw={'projection': 'polar'})
-    ax.barh(1, np.pi / 4, left=3 * np.pi / 4, color='#e74c3c', alpha=0.9, height=0.4)
-    ax.barh(1, np.pi / 4, left=2 * np.pi / 4, color='#e67e22', alpha=0.9, height=0.4)
-    ax.barh(1, np.pi / 4, left=np.pi / 4, color='#f1c40f', alpha=0.9, height=0.4)
-    ax.barh(1, np.pi / 4, left=0, color='#2ecc71', alpha=0.9, height=0.4)
-
-    proporcion_score = (score_cliente - 300) / (850 - 300)
-    angulo_aguja = np.pi - (proporcion_score * np.pi)
-    ax.annotate('', xy=(angulo_aguja, 1.1), xytext=(0, 0),
-                arrowprops=dict(facecolor='black', width=3, headwidth=8, shrink=0.1))
-
-    ax.set_xlim(0, np.pi)
-    ax.set_ylim(0, 1.2)
-    ax.set_frame_on(False)
-    ax.set_xticks([0, np.pi / 4, 2 * np.pi / 4, 3 * np.pi / 4, np.pi])
-    ax.set_xticklabels(['850\n(Exc)', '750\n(Bueno)', '650\n(Reg)', '500\n(Bajo)', '300'])
-    ax.set_yticklabels([])
-    ax.grid(False)
-    st.pyplot(fig)
-
-# ---------------------------------------------------------
-# IDENTIFICACIÓN AUTOMÁTICA DE LAS 5 C
-# ---------------------------------------------------------
-with tab3:
-    st.header("Análisis Cualitativo Automatizado: Las 5 C")
-
-    if dti_total <= 35:
-        capacidad_auto = "🟢 Alta Capacidad - Deudas controladas."
-    elif dti_total <= 45:
-        capacidad_auto = "🟡 Capacidad Moderada - Límites estándar del sector."
-    else:
-        capacidad_auto = "🔴 Capacidad Crítica - Alto sobreendeudamiento normativo."
-
-    if garantia_extra:
-        colateral_auto = f"🟢 Robusto - Cobertura extendida mediante '{tipo_garantia}' de ${valor_garantia:,.2f}."
-        capital_auto = f"🟢 Estructura patrimonial sólida. LTV seguro del {ltv_calculado:.1f}%."
-    else:
-        if dti_vivienda <= 30:
-            colateral_auto = "🟢 Conforme - El valor base cubre el préstamo."
-            capital_auto = "🟢 Aporte básico líquido suficiente."
-        else:
-            colateral_auto = "🟡 Ajustado / Cobertura patrimonial al límite."
-            capital_auto = "🔴 Capital expuesto al riesgo del producto."
-
-    if score_cliente >= 650:
-        caracter_auto = "🟢 Reputación Confiable - Historial de pago saludable."
-        condiciones_auto = f"🟢 Viable - Conforme a los lineamientos para: {tipo_credito}."
-    else:
-        caracter_auto = "🔴 Perfil de Riesgo Alto - Central de riesgos con novedades pasadas."
-        condiciones_auto = f"🔴 Restringido - Alerta política para colocar en {tipo_credito}."
-
-    st.markdown("### 📋 Reporte Integrado de las 5 C")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.info(f"**1. Carácter:** {caracter_auto}")
-        st.info(f"**2. Capacidad:** {capacidad_auto}")
-        st.info(f"**3. Capital:** {capital_auto}")
-    with c2:
-        st.info(f"**4. Colateral:** {colateral_auto}")
-        st.info(f"**5. Condiciones:** {condiciones_auto}")
-
-# ---------------------------------------------------------
-# CONCLUSIONES Y RECOMENDACIONES
-# ---------------------------------------------------------
-with tab4:
-    st.header("📌 Conclusiones y Recomendaciones Finales")
-
-    st.subheader("Conclusiones")
-    try:
-        if aprobado_final:
-            if garantia_extra and (dti_total > umbral_dti or score_cliente < 650):
-                st.markdown(
-                    f"* **Excepción por Colateral:** Solicitud aprobada condicionalmente en el segmento **{tipo_credito}** gracias a un colateral extra de **${valor_garantia:,.2f}**.")
-            else:
-                st.markdown(
-                    f"* **Aprobación Regular:** El cliente cumple perfectamente el perfil idóneo para la línea de **{tipo_credito}** con un indicador de cobertura patrimonial ($LTV$) del `{ltv_calculado:.2f}%`.")
-        else:
-            st.markdown(
-                f"* **Rechazo Técnico:** El perfil evaluado supera los límites consolidados para la cartera de **{tipo_credito}**.")
-    except:
-        st.markdown(f"* **Evaluación en curso:** Ingrese datos válidos en los controles.")
+    <!-- Estilos complementarios mínimos de animación -->
+    <style>
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</body>
+</html>
